@@ -61,6 +61,14 @@ body {
     grid-template-areas: "header header" "nav nav" "content content" "footer footer";
 }
 
+.nofooter.fullscreen.menu_stack #container {
+    -ms-grid-rows: 66px minmax(24px, max-content) 1fr 0px;
+    grid-template-rows: 66px minmax(24px, max-content) auto 0px;
+    -ms-grid-columns: 90px 1fr;
+    /*grid-template-columns: 90px repeat(auto-fit, minmax(900px, 1fr));*/
+    grid-template-areas: "header header" "nav nav" "content content" "footer footer";
+}
+
 .fullscreen #container {
     width: 100%;
     min-width: 100%;
@@ -77,6 +85,11 @@ body {
     grid-template-columns: 90px auto;
     -ms-grid-rows: 66px 24px 1fr 45px;
     grid-template-rows: 66px 24px auto 45px;
+}
+
+.nofooter #container {
+    -ms-grid-rows: 66px 24px 1fr 0px;
+    grid-template-rows: 66px 24px auto 0px;
 }
 
 .fulldesk #container {
@@ -294,6 +307,7 @@ body {
     background-color: #fff;
     /* max-height: calc(100vh - 151px); */
     min-width: unset;
+    overflow: hidden;
 }
 
 .night #column_l {
@@ -314,7 +328,7 @@ body {
     width: unset;
     /* height: calc(100vh - 111px);
         width: calc(100% - 30px); */
-    overflow-y: auto;
+    overflow: hidden;
 }
 
 .menu_stack.fullscreen #column_l, .login #column_l, .arg_hide #column_l {
@@ -374,7 +388,7 @@ body {
     color: blue;
 }
 
-#loginpanel, #createpanel, #resetpanel, #tokenpanel, #resettokenpanel, #resetpasswordpanel, #resetpasswordpanel {
+#loginpanel, #createpanel, #resetpanel, #tokenpanel, #resettokenpanel, #resetpasswordpanel, #resetpasswordpanel, #checkemailpanel {
     display: inline-block;
     margin: 0;
     background-color: #979797;
@@ -889,9 +903,17 @@ NoMeshesPanel img {
     padding: 4px;
 }
 
+.night #p5filehead {
+    background-color: #333;
+}
+
 #p5filesubhead {
     background-color: #E4E9E7;
     height: 28px;
+}
+
+.night #p5filesubhead {
+    background-color: #222;
 }
 
 #p5rightOfButtons {
@@ -1172,6 +1194,14 @@ a {
     border: none;
 }
 
+.i8 {
+    background: url(../images/icons50.png) -350px 0px;
+    height: 50px;
+    width: 50px;
+    cursor: pointer;
+    border: none;
+}
+
 .j1 {
     background: url(../images/icons16.png) 0px 0px;
     height: 16px;
@@ -1222,6 +1252,14 @@ a {
 
 .j7 {
     background: url(../images/icons16.png) -96px 0px;
+    height: 16px;
+    width: 16px;
+    cursor: pointer;
+    border: none;
+}
+
+.j8 {
+    background: url(../images/icons16.png) -112px 0px;
     height: 16px;
     width: 16px;
     cursor: pointer;
@@ -1436,6 +1474,14 @@ a {
     float: left;
 }
 
+.si8 {
+    background: url(../images/icons16.png) -112px 0px;
+    height: 16px;
+    width: 16px;
+    border: none;
+    float: left;
+}
+
 .mi {
     background: url(../images/meshicon50.png) 0px 0px;
     height: 50px;
@@ -1513,6 +1559,10 @@ a {
     padding: 3px;
 }
 
+.night .style6 {
+    background-color: #333;
+}
+
 .style7 {
     font-size: large;
     width: 180px;
@@ -1525,10 +1575,20 @@ a {
 
 .style10 {
     background-color: #C9C9C9;
+    color: #000;
 }
 
 .night .style10 {
-    color: #333;
+    background-color: #333;
+    color: #CCC;
+}
+
+.style10s {
+    background-color: #b9b9b9;
+}
+
+.night .style10s {
+    background-color: #444;
 }
 
 .style11 {
@@ -1542,7 +1602,13 @@ a {
     background-color: #D3D9D6;
 }
 
+.night .style14 {
+    background-color: #333;
+    color: #CCC;
+}
+
 .auto-style1 {
+    background-color: #D3D9D6;
     text-align: right;
 }
 
@@ -1552,7 +1618,8 @@ a {
 }
 
 .night .auto-style1 {
-    color: black;
+    background-color: #333;
+    color: #CCC;
 }
 
 .night #pTable {
@@ -1626,6 +1693,10 @@ a {
         border-radius: 3px;
     }
 
+    .night .filelist:hover {
+        background: #444;
+    }
+
 .noselect {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
@@ -1665,7 +1736,7 @@ a {
 }
 
 .night .g1 {
-    background-image: linear-gradient(to right, #000 0%, #c9c9c9 100%);
+    background-image: linear-gradient(to right, #000 0%, #333 100%);
 }
 
 #p3events .g1 {
@@ -1690,7 +1761,7 @@ a {
 }
 
 .night .g1s {
-    background-image: linear-gradient(to right, #000 0%, #b9b9b9 100%);
+    background-image: linear-gradient(to right, #000 0%, #444 100%);
 }
 
 .g2 {
@@ -1708,7 +1779,7 @@ a {
 }
 
 .night .g2 {
-    background-image: linear-gradient(to right, #c9c9c9 0%, #000 100%);
+    background-image: linear-gradient(to right, #333 0%, #000 100%);
 }
 
 #p3events .g2 {
@@ -1733,7 +1804,7 @@ a {
 }
 
 .night .g2s {
-    background-image: linear-gradient(to right, #b9b9b9 0%, #000 100%);
+    background-image: linear-gradient(to right, #444 0%, #000 100%);
 }
 
 .h1pre {
@@ -1762,7 +1833,7 @@ a {
 }
 
 .night .h1 {
-    background-image: linear-gradient(to right, #000 0%, #d3d9d6 100%);
+    background-image: linear-gradient(to right, #000 0%, #333 100%);
 }
 
 .h2end {
@@ -1786,7 +1857,7 @@ a {
 }
 
 .night .h2 {
-    background-image: linear-gradient(to right, #d3d9d6 0%, #000 100%);
+    background-image: linear-gradient(to right, #333 0%, #000 100%);
 }
 
 .e1 {
@@ -1806,11 +1877,16 @@ a {
 }
 
 .night .e2 {
-    color: black;
+    color: #CCC;
+    background-color: #333;
 }
 
 .e2s {
     background-color: #b9b9b9;
+}
+
+.night .e2s {
+    background-color: #444;
 }
 
 .bar {
@@ -1822,9 +1898,17 @@ a {
 }
 
 .night .bar {
-    color: black;
+    color: #CCC;
+    background-color: #333;
 }
 
+.sbar {
+    background-color: #b9b9b9;
+}
+
+.night .sbar {
+    background-color: #444;
+}
 
 #p3users .bar {
     width: 100%;
@@ -1863,6 +1947,11 @@ a {
     float: left;
     margin-bottom: 2px;
     color: black;
+}
+
+.night .bar18 {
+    background-color: #333;
+    color: #CCC;
 }
 
 .bar182 {
@@ -2022,6 +2111,11 @@ a {
     background: #C0C0C0;
 }
 
+.night .areaHead {
+    color: #CCC;
+    background: #333;
+}
+
 .areaProgress {
     background-color: gray;
 }
@@ -2036,6 +2130,11 @@ a {
     padding-top: 2px;
     padding-bottom: 2px;
     background: #C0C0C0;
+}
+
+.night .areaFoot {
+    color: #CCC;
+    background: #333;
 }
 
 .toright2 {
@@ -2261,7 +2360,8 @@ a {
 }
 
 .night .serverStateTableCell {
-    color: black;
+    background-color: #333;
+    color: #CCC;
 }
 
 .userTableHeader {
@@ -2321,9 +2421,17 @@ a {
         padding: 4px;
     }
 
+    .night #p13toolbar .areaHead2 {
+        background-color: #333;
+    }
+
     #p13toolbar .areaHead3 {
         background-color: #E4E9E7;
         height: 28px;
+    }
+
+    .night #p13toolbar .areaHead3 {
+        background-color: #333;
     }
 
 #p13filetable {
@@ -2645,6 +2753,10 @@ a {
     padding: 3px;
     border-radius: 3px;
     background-color: #DDD;
+}
+
+.night .traceEvent {
+    background-color: #222;
 }
 
 .p42tblRow {

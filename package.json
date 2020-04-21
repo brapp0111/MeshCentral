@@ -1,6 +1,6 @@
 {
   "name": "meshcentral",
-  "version": "0.4.9-d",
+  "version": "0.5.11",
   "keywords": [
     "Remote Management",
     "Intel AMT",
@@ -9,7 +9,7 @@
   ],
   "homepage": "http://meshcommander.com",
   "description": "Web based remote computer management and file server",
-  "author": "Ylian Saint-Hilaire <ysainthilaire@hotmail.com>",
+  "author": "Ylian Saint-Hilaire <ylianst@gmail.com>",
   "main": "meshcentral.js",
   "bin": {
     "meshcentral": "./bin/meshcentral"
@@ -20,6 +20,7 @@
     "amt",
     "bin",
     "views",
+    "emails",
     "agents",
     "public",
     "translate",
@@ -37,7 +38,6 @@
     "express": "^4.17.0",
     "express-handlebars": "^3.1.0",
     "express-ws": "^4.0.0",
-    "image-size": "^0.8.3",
     "ipcheck": "^0.1.0",
     "minimist": "^1.2.0",
     "multiparty": "^4.2.1",

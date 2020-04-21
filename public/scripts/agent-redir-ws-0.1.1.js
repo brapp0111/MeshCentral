@@ -28,6 +28,7 @@ var CreateAgentRedirect = function (meshserver, module, serverPublicNamePort, au
     obj.webrtc = null;
     obj.debugmode = 0;
     obj.serverIsRecording = false;
+    obj.latency = { lastSend: null, current: -1, callback: null };
     if (domainUrl == null) { domainUrl = '/'; }
 
     // Console Message
@@ -71,8 +72,10 @@ var CreateAgentRedirect = function (meshserver, module, serverPublicNamePort, au
         //console.log(controlMsg);
         if ((typeof args != 'undefined') && args.redirtrace) { console.log('RedirRecv', controlMsg); }
         if (controlMsg.type == 'console') {
-            obj.consoleMessage = controlMsg.msg;
-            if (obj.onConsoleMessageChange) { obj.onConsoleMessageChange(obj, obj.consoleMessage); }
+            setConsoleMessage(controlMsg.msg);
+        } else if ((controlMsg.type == 'rtt') && (typeof controlMsg.time == 'number')) {
+            obj.latency.current = (new Date().getTime()) - controlMsg.time;
+            if (obj.latency.callbacks != null) { obj.latency.callback(obj.latency.current); }
         } else if (obj.webrtc != null) {
             if (controlMsg.type == 'answer') {
                 obj.webrtc.setRemoteDescription(new RTCSessionDescription(controlMsg), function () { /*console.log('WebRTC remote ok');*/ }, obj.xxCloseWebRTC);
@@ -87,17 +90,25 @@ var CreateAgentRedirect = function (meshserver, module, serverPublicNamePort, au
         }
     }
 
+    // Set the console message
+    obj.setConsoleMessage = function (str) {
+        if (obj.consoleMessage == str) return;
+        obj.consoleMessage = str;
+        if (obj.onConsoleMessageChange) { obj.onConsoleMessageChange(obj, obj.consoleMessage); }
+    }
+
     obj.sendCtrlMsg = function (x) { if (obj.ctrlMsgAllowed == true) { if ((typeof args != 'undefined') && args.redirtrace) { console.log('RedirSend', typeof x, x); } try { obj.socket.send(x); } catch (ex) { } } }
 
     function performWebRtcSwitch() {
         if ((obj.webSwitchOk == true) && (obj.webRtcActive == true)) {
+            obj.latency.current = -1; // RTT will no longer be calculated when WebRTC is enabled
             obj.sendCtrlMsg('{"ctrlChannel":"102938","type":"webrtc0"}'); // Indicate to the meshagent that it can start traffic switchover
             obj.sendCtrlMsg('{"ctrlChannel":"102938","type":"webrtc1"}'); // Indicate to the meshagent that data traffic will no longer be sent over websocket.
             // TODO: Hold/Stop sending data over websocket
             if (obj.onStateChanged != null) { obj.onStateChanged(obj, obj.State); }
         }
     }
-
+        
     obj.xxOnMessage = function (e) {
         //console.log('Recv', e.data, e.data.byteLength, obj.State);
         if (obj.State < 3) {
@@ -138,6 +149,7 @@ var CreateAgentRedirect = function (meshserver, module, serverPublicNamePort, au
                         }, obj.xxCloseWebRTC, { mandatory: { OfferToReceiveAudio: false, OfferToReceiveVideo: false } });
                     }
                 }
+
                 return;
             }
         }
@@ -167,6 +179,12 @@ var CreateAgentRedirect = function (meshserver, module, serverPublicNamePort, au
         } else {
             // If we get a string object, it maybe the WebRTC confirm. Ignore it.
             obj.xxOnSocketData(e.data);
+        }
+
+        // Request RTT mesure, don't use this if WebRTC is active
+        if (obj.webRtcActive != true) {
+            var ticks = new Date().getTime();
+            if ((obj.latency.lastSend == null) || ((ticks - obj.latency.lastSend) > 5000)) { obj.latency.lastSend = ticks; obj.sendCtrlMsg('{"ctrlChannel":"102938","type":"rtt","time":' + ticks + '}'); }
         }
     };
 

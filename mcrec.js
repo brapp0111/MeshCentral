@@ -12,38 +12,40 @@ var path = require('path');
 var worker = null;
 const NodeJSVer = Number(process.version.match(/^v(\d+\.\d+)/)[1]);
 var directRun = (require.main === module);
-function log() { if (directRun) { console.log(...arguments); } else { if (worker != null) { worker.parentPort.postMessage({ msg: arguments[0] }); } } }
+function log() { if (directRun) { console.log(...arguments); } /*else { if (worker != null) { worker.parentPort.postMessage({ msg: arguments[0] }); } } */ }
 if (directRun && (NodeJSVer >= 12)) { const xworker = require('worker_threads'); try { if (xworker.isMainThread == false) { worker = xworker; } } catch (ex) { log(ex); } }
 function start() { startEx(process.argv); }
 if (directRun) { setup(); }
 
 function setup() { InstallModules(['image-size'], start); }
 function start() { startEx(process.argv); }
-
 function startEx(argv) {
-    var state = { recFileName: null, recFile: null, recFileSize: 0, recFilePtr: 0 };
-    var infile = null;
-    if (argv.length > 2) { infile = argv[2]; } else {
-        log('MeshCentral Session Recodings Processor');
-        log('This tool will index a .mcrec file so that the player can seek thru the file.');
-        log('');
-        log('  Usage: node mcrec [file]');
-        return;
+    if (argv.length > 2) { indexFile(argv[2]); } else {
+        log("MeshCentral Session Recodings Processor");
+        log("This tool will index a .mcrec file so that the player can seek thru the file.");
+        log("");
+        log("  Usage: node mcrec [file]");
     }
+}
+
+function indexFile(infile) {
+    var state = { recFileName: null, recFile: null, recFileSize: 0, recFilePtr: 0 };
     if (fs.existsSync(infile) == false) { log("Missing file: " + infile); return; }
     state.recFileName = infile;
     state.recFileSize = fs.statSync(infile).size;
     if (state.recFileSize < 32) { log("Invalid file: " + infile); return; }
     log("Processing file: " + infile + ", " + state.recFileSize + " bytes.");
-    state.recFile = fs.openSync(infile, 'r');
+    state.recFile = fs.openSync(infile, 'r+');
     state.indexTime = 10; // Interval between indexes in seconds
     state.lastIndex = 0; // Last time an index was writen in seconds
     state.indexes = [];
     state.width = 0;
     state.height = 0;
     state.basePtr = null;
-    readLastBlock(state, function (state, result) {
+    readLastBlock(state, function (state, result, time, extras) {
         if (result == false) { log("Invalid file: " + infile); return; }
+        if (extras != null) { log("File already indexed: " + infile); return; }
+        state.lastTimeStamp = time;
         readNextBlock(state, processBlock);
     });
 }
@@ -61,8 +63,25 @@ function createIndex(state, ptr) {
     state.lastIndex += 10;
 }
 
-function processBlock(state, block) {
-    if (block == null) { writeIndexedFile(state, function () { log("Done."); }); return; }
+function processBlock(state, block, err) {
+    if (err != null) {
+        // Error reading the next block, exit now.
+        fs.close(state.recFile, function () {
+            for (var i in state) { delete state[i]; } // Clear the state.
+            log("Error.");
+        });
+        return;
+    }
+    if (block == null) {
+        // We are done, close this file.
+        writeIndex(state, function () {
+            fs.close(state.recFile, function () {
+                for (var i in state) { delete state[i]; } // Clear the state.
+                log("Done.");
+            });
+        });
+        return;
+    }
     var elapseMilliSeconds = 0;
     if (state.startTime != null) { elapseMilliSeconds = (block.time - state.startTime); }
     var flagBinary = (block.flags & 1) != 0;
@@ -94,13 +113,13 @@ function processBlock(state, block) {
             // MeshCentral Remote Desktop
             // TODO
             if (block.data.length >= 4) {
-                var command = block.data.readInt16BE(0);
-                var cmdsize = block.data.readInt16BE(2);
+                var command = block.data.readUInt16BE(0);
+                var cmdsize = block.data.readUInt16BE(2);
                 if ((command == 27) && (cmdsize == 8)) {
                     // Jumbo packet
                     if (block.data.length >= 12) {
-                        command = block.data.readInt16BE(8);
-                        cmdsize = block.data.readInt32BE(4);
+                        command = block.data.readUInt16BE(8);
+                        cmdsize = block.data.readUInt32BE(4);
                         if (block.data.length == (cmdsize + 8)) {
                             block.data = block.data.slice(8, block.data.length);
                         } else {
@@ -112,8 +131,8 @@ function processBlock(state, block) {
 
                 switch (command) {
                     case 3: // Tile
-                        var x = block.data.readInt16BE(4);
-                        var y = block.data.readInt16BE(6);
+                        var x = block.data.readUInt16BE(4);
+                        var y = block.data.readUInt16BE(6);
                         var dimensions = require('image-size')(block.data.slice(8));
                         //log("Tile", x, y, dimensions.width, dimensions.height, block.ptr);
                         //console.log(elapseSeconds);
@@ -129,13 +148,13 @@ function processBlock(state, block) {
 
                         break;
                     case 4: // Tile copy
-                        var x = block.data.readInt16BE(4);
-                        var y = block.data.readInt16BE(6);
+                        var x = block.data.readUInt16BE(4);
+                        var y = block.data.readUInt16BE(6);
                         //log("TileCopy", x, y);
                         break;
                     case 7: // Screen Size, clear the screen state and computer the tile count
-                        state.width = block.data.readInt16BE(4);
-                        state.height = block.data.readInt16BE(6);
+                        state.width = block.data.readUInt16BE(4);
+                        state.height = block.data.readUInt16BE(6);
                         state.swidth = state.width / 16;
                         state.sheight = state.height / 16;
                         if (Math.floor(state.swidth) != state.swidth) { state.swidth = Math.floor(state.swidth) + 1; }
@@ -164,61 +183,78 @@ function processBlock(state, block) {
     readNextBlock(state, processBlock);
 }
 
-function writeIndexedFile(state, func) {
-    var outfile = state.recFileName;
-    if (outfile.endsWith('.mcrec')) { outfile = outfile.substring(0, outfile.length - 6) + '-ndx.mcrec'; } else { outfile += '-ndx.mcrec'; }
-    if (fs.existsSync(outfile)) { log("File already exists: " + outfile); return; }
-    log("Writing file: " + outfile);
-    state.writeFile = fs.openSync(outfile, 'w');
-    state.metadata.indexInterval = state.indexTime;
-    state.metadata.indexStartTime = state.startTime;
-    state.metadata.indexes = state.indexes;
-    var firstBlock = JSON.stringify(state.metadata);
-    recordingEntry(state.writeFile, 1, state.metadataFlags, state.metadataTime, firstBlock, function (state) {
-        var len = 0, buffer = Buffer.alloc(4096), ptr = state.dataStartPtr;
-        while (ptr < state.recFileSize) {
-            len = fs.readSync(state.recFile, buffer, 0, 4096, ptr);
-            fs.writeSync(state.writeFile, buffer, 0, len);
-            ptr += len;
-        }
-        func(state);
-    }, state);
+function writeIndex(state, func) {
+    // Add the new indexes in extra metadata at the end of the file.
+    var extraMetadata = {};
+    extraMetadata.indexInterval = state.indexTime;
+    extraMetadata.indexStartTime = state.startTime;
+    extraMetadata.indexes = state.indexes;
+    recordingEntry(state.recFile, 4, 0, state.lastTimeStamp, JSON.stringify(extraMetadata), function (state, len) {
+        recordingEntry(state.recFile, 3, 0, state.recFileSize - 32, 'MeshCentralMCNDX', function (state) {
+            func(state);
+        }, state, state.recFileSize - 32 + len);
+    }, state, state.recFileSize - 32);
 }
 
 // Record a new entry in a recording log
-function recordingEntry(fd, type, flags, time, data, func, tag) {
+function recordingEntry(fd, type, flags, time, data, func, tag, position) {
     try {
         if (typeof data == 'string') {
             // String write
             var blockData = Buffer.from(data), header = Buffer.alloc(16); // Header: Type (2) + Flags (2) + Size(4) + Time(8)
-            header.writeInt16BE(type, 0); // Type (1 = Header, 2 = Network Data)
+            header.writeInt16BE(type, 0); // Type (1 = Header, 2 = Network Data, 3 = End, 4 = Extra Metadata)
             header.writeInt16BE(flags, 2); // Flags (1 = Binary, 2 = User)
             header.writeInt32BE(blockData.length, 4); // Size
             header.writeIntBE(time, 10, 6); // Time
             var block = Buffer.concat([header, blockData]);
-            fs.write(fd, block, 0, block.length, function () { func(tag); });
+            if (typeof position == 'number') {
+                fs.write(fd, block, 0, block.length, position, function () { func(tag, block.length); });
+            } else {
+                fs.write(fd, block, 0, block.length, function () { func(tag, block.length); });
+            }
         } else {
             // Binary write
             var header = Buffer.alloc(16); // Header: Type (2) + Flags (2) + Size(4) + Time(8)
-            header.writeInt16BE(type, 0); // Type (1 = Header, 2 = Network Data)
+            header.writeInt16BE(type, 0); // Type (1 = Header, 2 = Network Data, 3 = End, 4 = Extra Metadata)
             header.writeInt16BE(flags | 1, 2); // Flags (1 = Binary, 2 = User)
             header.writeInt32BE(data.length, 4); // Size
             header.writeIntBE(time, 10, 6); // Time
             var block = Buffer.concat([header, data]);
-            fs.write(fd, block, 0, block.length, function () { func(tag); });
+            if (typeof position == 'number') {
+                fs.write(fd, block, 0, block.length, position, function () { func(tag, block.length); });
+            } else {
+                fs.write(fd, block, 0, block.length, function () { func(tag, block.length); });
+            }
         }
-    } catch (ex) { console.log(ex); func(state, tag); }
+    } catch (ex) { console.log(ex); func(tag); }
 }
 
 function readLastBlock(state, func) {
     var buf = Buffer.alloc(32);
     fs.read(state.recFile, buf, 0, 32, state.recFileSize - 32, function (err, bytesRead, buf) {
-        var type = buf.readInt16BE(0);
-        var flags = buf.readInt16BE(2);
-        var size = buf.readInt32BE(4);
-        var time = (buf.readInt32BE(8) << 32) + buf.readInt32BE(12);
+        var type = buf.readUInt16BE(0); // Type (1 = Header, 2 = Network Data)
+        var flags = buf.readUInt16BE(2); // Flags (1 = Binary, 2 = User)
+        var size = buf.readUInt32BE(4); // Size
+        var time = buf.readUIntBE(10, 6); // Time
         var magic = buf.toString('utf8', 16, 32);
-        func(state, (type == 3) && (size == 16) && (magic == 'MeshCentralMCREC'));
+        if ((type == 3) && (size == 16) && (magic == 'MeshCentralMCNDX')) {
+            // Extra metadata present, lets read it.
+            extraMetadata = null;
+            var buf2 = Buffer.alloc(16);
+            fs.read(state.recFile, buf2, 0, 16, time, function (err, bytesRead, buf2) {
+                var xtype = buf2.readUInt16BE(0); // Type (1 = Header, 2 = Network Data, 3 = End, 4 = Extra Metadata)
+                var xflags = buf2.readUInt16BE(2); // Flags (1 = Binary, 2 = User)
+                var xsize = buf2.readUInt32BE(4); // Size
+                var xtime = buf.readUIntBE(10, 6); // Time
+                var buf3 = Buffer.alloc(xsize);
+                fs.read(state.recFile, buf3, 0, xsize, time + 16, function (err, bytesRead, buf3) {
+                    func(state, true, xtime, JSON.parse(buf3.toString()));
+                });
+            });
+        } else {
+            // No extra metadata or fail
+            func(state, (type == 3) && (size == 16) && (magic == 'MeshCentralMCREC'), time, null);
+        }
     });
 }
 
@@ -226,23 +262,26 @@ function readNextBlock(state, func) {
     if ((state.recFilePtr + 16) > state.recFileSize) { func(state, null); return; }
     var r = {}, buf = Buffer.alloc(16);
     fs.read(state.recFile, buf, 0, 16, state.recFilePtr, function (err, bytesRead, buf) {
-        r.type = buf.readInt16BE(0);
-        r.flags = buf.readInt16BE(2);
-        r.size = buf.readInt32BE(4);
-        r.time = buf.readIntBE(8, 8);
-        r.date = new Date(r.time);
-        r.ptr = state.recFilePtr;
-        if ((state.recFilePtr + 16 + r.size) > state.recFileSize) { func(state, null); return; }
-        if (r.size == 0) {
-            r.data = null;
-            func(state, r);
-        } else {
-            r.data = Buffer.alloc(r.size);
-            fs.read(state.recFile, r.data, 0, r.size, state.recFilePtr + 16, function (err, bytesRead, buf) {
-                state.recFilePtr += (16 + r.size);
+        if (bytesRead != 16) { func(state, null, true); return; } // Error
+        try {
+            r.type = buf.readUInt16BE(0); // Type (1 = Header, 2 = Network Data, 3 = End, 4 = Extra Metadata)
+            r.flags = buf.readUInt16BE(2); // Flags (1 = Binary, 2 = User)
+            r.size = buf.readUInt32BE(4); // Size
+            r.time = buf.readUIntBE(10, 6); // Time
+            r.date = new Date(r.time);
+            r.ptr = state.recFilePtr;
+            if ((state.recFilePtr + 16 + r.size) > state.recFileSize) { func(state, null, true); return; } // Error
+            if (r.size == 0) {
+                r.data = null;
                 func(state, r);
-            });
-        }
+            } else {
+                r.data = Buffer.alloc(r.size);
+                fs.read(state.recFile, r.data, 0, r.size, state.recFilePtr + 16, function (err, bytesRead, buf) {
+                    state.recFilePtr += (16 + r.size);
+                    func(state, r);
+                });
+            }
+        } catch (ex) { func(state, null, true); return; } // Error
     });
 }
 
@@ -292,3 +331,4 @@ function InstallModule(modulename, func, tag1, tag2) {
 
 // Export table
 module.exports.startEx = startEx;
+module.exports.indexFile = indexFile;

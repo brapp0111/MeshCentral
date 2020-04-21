@@ -80,7 +80,7 @@ module.exports.CreateMeshRelay = function (parent, ws, req, domain, user, cookie
             var agent = parent.wsagents[command.nodeid];
             if (agent != null) {
                 // Check if we have permission to send a message to that node
-                rights = user.links[agent.dbMeshKey]; // TODO: Need to include user group / node rights
+                rights = parent.GetNodeRights(user, agent.dbMeshKey, agent.dbNodeKey);
                 mesh = parent.meshes[agent.dbMeshKey];
                 if ((rights != null) && (mesh != null) || ((rights & 16) != 0)) { // TODO: 16 is console permission, may need more gradular permission checking
                     if (ws.sessionId) { command.sessionid = ws.sessionId; }   // Set the session id, required for responses.
@@ -98,7 +98,7 @@ module.exports.CreateMeshRelay = function (parent, ws, req, domain, user, cookie
                 var routing = parent.parent.GetRoutingServerId(command.nodeid, 1); // 1 = MeshAgent routing type
                 if (routing != null) {
                     // Check if we have permission to send a message to that node
-                    rights = user.links[routing.meshid]; // TODO: Need to include user groups / node rights
+                    rights = parent.GetNodeRights(user, routing.meshid, command.nodeid);
                     mesh = parent.meshes[routing.meshid];
                     if (rights != null || ((rights & 16) != 0)) { // TODO: 16 is console permission, may need more gradular permission checking
                         if (ws.sessionId) { command.fromSessionid = ws.sessionId; }   // Set the session id, required for responses.
@@ -115,7 +115,17 @@ module.exports.CreateMeshRelay = function (parent, ws, req, domain, user, cookie
         }
         return false;
     };
-    
+
+    // Send a PING/PONG message
+    function sendPing() {
+        try { obj.ws.send('{"ctrlChannel":"102938","type":"ping"}'); } catch (ex) { }
+        try { if (obj.peer != null) { obj.peer.ws.send('{"ctrlChannel":"102938","type":"ping"}'); } } catch (ex) { }
+    }
+    function sendPong() {
+        try { obj.ws.send('{"ctrlChannel":"102938","type":"pong"}'); } catch (ex) { }
+        try { if (obj.peer != null) { obj.peer.ws.send('{"ctrlChannel":"102938","type":"pong"}'); } } catch (ex) { }
+    }
+
     function performRelay() {
         if (obj.id == null) { try { obj.close(); } catch (e) { } return null; } // Attempt to connect without id, drop this.
         ws._socket.setKeepAlive(true, 240000); // Set TCP keep alive
@@ -191,9 +201,13 @@ module.exports.CreateMeshRelay = function (parent, ws, req, domain, user, cookie
 
                     relayinfo.peer1.ws.peer = relayinfo.peer2.ws;
                     relayinfo.peer2.ws.peer = relayinfo.peer1.ws;
-
+                    
                     // Remove the timeout
                     if (relayinfo.timeout) { clearTimeout(relayinfo.timeout); delete relayinfo.timeout; }
+
+                    // Setup the agent PING/PONG timers
+                    if ((typeof parent.parent.args.agentping == 'number') && (obj.pingtimer == null)) { obj.pingtimer = setInterval(sendPing, parent.parent.args.agentping * 1000); }
+                    else if ((typeof parent.parent.args.agentpong == 'number') && (obj.pongtimer == null)) { obj.pongtimer = setInterval(sendPong, parent.parent.args.agentpong * 1000); }
 
                     // Setup session recording
                     var sessionUser = obj.user;
@@ -203,7 +217,7 @@ module.exports.CreateMeshRelay = function (parent, ws, req, domain, user, cookie
                         parent.db.Get(obj.req.query.nodeid, function (err, nodes) {
                             var xusername = '', xdevicename = '', xdevicename2 = null;
                             if ((nodes != null) && (nodes.length == 1)) { xdevicename2 = nodes[0].name; xdevicename = '-' + parent.common.makeFilename(nodes[0].name); }
-
+                            
                             // Get the username and make it acceptable as a filename
                             if (sessionUser._id) { xusername = '-' + parent.common.makeFilename(sessionUser._id.split('/')[2]); }
 
@@ -227,8 +241,8 @@ module.exports.CreateMeshRelay = function (parent, ws, req, domain, user, cookie
                                     var metadata = { magic: 'MeshCentralRelaySession', ver: 1, userid: sessionUser._id, username: sessionUser.name, sessionid: obj.id, ipaddr1: cleanRemoteAddr(obj.req.ip), ipaddr2: cleanRemoteAddr(obj.peer.req.ip), time: new Date().toLocaleString(), protocol: (((obj.req == null) || (obj.req.query == null)) ? null : obj.req.query.p), nodeid: (((obj.req == null) || (obj.req.query == null)) ? null : obj.req.query.nodeid ) };
                                     if (xdevicename2 != null) { metadata.devicename = xdevicename2; }
                                     var firstBlock = JSON.stringify(metadata);
-                                    recordingEntry(fd, 1, ((obj.req.query.browser) ? 2 : 0), firstBlock, function () {
-                                        try { relayinfo.peer1.ws.logfile = ws.logfile = { fd: fd, lock: false }; } catch (ex) {
+                                    recordingEntry(fd, 1, 0, firstBlock, function () {
+                                        try { relayinfo.peer1.ws.logfile = ws.logfile = { fd: fd, lock: false, filename: recFullFilename }; } catch (ex) {
                                             try { ws.send('c'); } catch (ex) { } // Send connect to both peers, 'cr' indicates the session is being recorded.
                                             try { relayinfo.peer1.ws.send('c'); } catch (ex) { }
                                             return;
@@ -330,9 +344,6 @@ module.exports.CreateMeshRelay = function (parent, ws, req, domain, user, cookie
                 if (relayinfo.state == 2) {
                     var peer = (relayinfo.peer1 == obj) ? relayinfo.peer2 : relayinfo.peer1;
 
-                    // Close the recording file
-                    if (ws.logfile != null) { recordingEntry(ws.logfile.fd, 3, 0, 'MeshCentralMCREC', function (fd, tag) { parent.parent.fs.close(fd); tag.ws.logfile = null; tag.pws.logfile = null; }, { ws: ws, pws: peer.ws }); }
-
                     // Disconnect the peer
                     try { if (peer.relaySessionCounted) { parent.relaySessionCount--; delete peer.relaySessionCounted; } } catch (ex) { console.log(ex); }
                     parent.parent.debug('relay', 'Relay disconnect: ' + obj.id + ' (' + cleanRemoteAddr(obj.req.ip) + ' --> ' + cleanRemoteAddr(peer.req.ip) + ')');
@@ -346,10 +357,10 @@ module.exports.CreateMeshRelay = function (parent, ws, req, domain, user, cookie
                         else if (obj.req.query.p == 2) { msg = 'Ended desktop session'; }
                         else if (obj.req.query.p == 5) { msg = 'Ended file management session'; }
                         if (user) {
-                            var event = { etype: 'relay', action: 'relaylog', domain: domain.id, userid: user._id, username: parent.users[user._id].name, msg: msg + ' \"' + obj.id + '\" from ' + cleanRemoteAddr(obj.peer.req.ip) + ' to ' + cleanRemoteAddr(obj.req.ip) + ', ' + Math.floor((Date.now() - ws.time) / 1000) + ' second(s)', protocol: obj.req.query.p, nodeid: obj.req.query.nodeid };
+                            var event = { etype: 'relay', action: 'relaylog', domain: domain.id, userid: user._id, username: user.name, msg: msg + ' \"' + obj.id + '\" from ' + cleanRemoteAddr(obj.peer.req.ip) + ' to ' + cleanRemoteAddr(obj.req.ip) + ', ' + Math.floor((Date.now() - ws.time) / 1000) + ' second(s)', protocol: obj.req.query.p, nodeid: obj.req.query.nodeid };
                             parent.parent.DispatchEvent(['*', user._id], obj, event);
                         } else if (peer.user) {
-                            var event = { etype: 'relay', action: 'relaylog', domain: domain.id, userid: peer.user._id, username: parent.users[peer.user._id].name, msg: msg + ' \"' + obj.id + '\" from ' + cleanRemoteAddr(obj.peer.req.ip) + ' to ' + cleanRemoteAddr(obj.req.ip) + ', ' + Math.floor((Date.now() - ws.time) / 1000) + ' second(s)', protocol: obj.req.query.p, nodeid: obj.req.query.nodeid };
+                            var event = { etype: 'relay', action: 'relaylog', domain: domain.id, userid: peer.user._id, username: peer.user.name, msg: msg + ' \"' + obj.id + '\" from ' + cleanRemoteAddr(obj.peer.req.ip) + ' to ' + cleanRemoteAddr(obj.req.ip) + ', ' + Math.floor((Date.now() - ws.time) / 1000) + ' second(s)', protocol: obj.req.query.p, nodeid: obj.req.query.nodeid };
                             parent.parent.DispatchEvent(['*', peer.user._id], obj, event);
                         }
                     }
@@ -358,9 +369,24 @@ module.exports.CreateMeshRelay = function (parent, ws, req, domain, user, cookie
                     delete peer.id;
                     delete peer.ws;
                     delete peer.peer;
+                    if (peer.pingtimer != null) { clearInterval(peer.pingtimer); delete peer.pingtimer; }
+                    if (peer.pongtimer != null) { clearInterval(peer.pongtimer); delete peer.pongtimer; }
                 } else {
                     parent.parent.debug('relay', 'Relay disconnect: ' + obj.id + ' (' + cleanRemoteAddr(obj.req.ip) + ')');
                 }
+
+                // Close the recording file if needed
+                if (ws.logfile != null) {
+                    var logfile = ws.logfile;
+                    delete ws.logfile;
+                    if (peer.ws) { delete peer.ws.logfile; }
+                    recordingEntry(logfile.fd, 3, 0, 'MeshCentralMCREC', function (fd, tag) {
+                        parent.parent.fs.close(fd);
+                        // Now that the recording file is closed, check if we need to index this file.
+                        if (domain.sessionrecording.index !== false) { parent.parent.certificateOperations.acceleratorPerformOperation('indexMcRec', tag.logfile.filename); }
+                    }, { ws: ws, pws: peer.ws, logfile: logfile });
+                }
+
                 try { ws.close(); } catch (ex) { }
                 delete parent.wsrelays[obj.id];
             }
@@ -370,6 +396,8 @@ module.exports.CreateMeshRelay = function (parent, ws, req, domain, user, cookie
         delete obj.id;
         delete obj.ws;
         delete obj.peer;
+        if (obj.pingtimer != null) { clearInterval(obj.pingtimer); delete obj.pingtimer; }
+        if (obj.pongtimer != null) { clearInterval(obj.pongtimer); delete obj.pongtimer; }
     }
 
     // Record a new entry in a recording log
@@ -407,10 +435,9 @@ module.exports.CreateMeshRelay = function (parent, ws, req, domain, user, cookie
             parent.db.Get(cookie.nodeid, function (err, docs) {
                 if (docs.length == 0) { console.log('ERR: Node not found'); try { obj.close(); } catch (e) { } return; } // Disconnect websocket
                 const node = docs[0];
-
+                
                 // Check if this user has permission to manage this computer
-                const meshlinks = user.links[node.meshid];
-                if ((!meshlinks) || (!meshlinks.rights) || ((meshlinks.rights & MESHRIGHT_REMOTECONTROL) == 0)) { console.log('ERR: Access denied (2)'); try { obj.close(); } catch (e) { } return; }
+                if ((parent.GetNodeRights(user, node.meshid, node._id) & MESHRIGHT_REMOTECONTROL) == 0) { console.log('ERR: Access denied (1)'); try { obj.close(); } catch (e) { } return; }
 
                 // Send connection request to agent
                 const rcookie = parent.parent.encodeCookie({ ruserid: user._id }, parent.parent.loginCookieEncryptionKey);
@@ -426,10 +453,9 @@ module.exports.CreateMeshRelay = function (parent, ws, req, domain, user, cookie
             parent.db.Get(obj.req.query.nodeid, function (err, docs) {
                 if (docs.length == 0) { console.log('ERR: Node not found'); try { obj.close(); } catch (e) { } return; } // Disconnect websocket
                 const node = docs[0];
-
+                
                 // Check if this user has permission to manage this computer
-                const meshlinks = user.links[node.meshid];
-                if ((!meshlinks) || (!meshlinks.rights) || ((meshlinks.rights & MESHRIGHT_REMOTECONTROL) == 0)) { console.log('ERR: Access denied (2)'); try { obj.close(); } catch (e) { } return; }
+                if ((parent.GetNodeRights(user, node.meshid, node._id) & MESHRIGHT_REMOTECONTROL) == 0) { console.log('ERR: Access denied (2)'); try { obj.close(); } catch (e) { } return; }
 
                 // Send connection request to agent
                 if (obj.id == null) { obj.id = ('' + Math.random()).substring(2); } // If there is no connection id, generate one.

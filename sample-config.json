@@ -1,10 +1,11 @@
 {
-  "__comment__" : "This is a sample configuration file, edit a section and remove the _ in front of the name. Refer to the user's guide for details.",
+  "__comment__" : "This is a sample configuration file, all values and sections that start with underscore (_) are ignored. Edit a section and remove the _ in front of the name. Refer to the user's guide for details.",
   "settings": {
     "_Cert": "myserver.mydomain.com",
     "_MongoDb": "mongodb://127.0.0.1:27017",
     "_MongoDbName": "meshcentral",
     "_MongoDbChangeStream": true,
+    "_MongoDumpPath": "C:\\Program Files\\MongoDB\\Server\\4.2\\bin\\mongodump.exe",
     "_WANonly": true,
     "_LANonly": true,
     "_Minify": 1,
@@ -14,14 +15,19 @@
     "_DbEncryptKey": "MyReallySecretPassword2",
     "_DbRecordsEncryptKey": "MyReallySecretPassword",
     "_DbRecordsDecryptKey": "MyReallySecretPassword",
+    "__DbExpire": "Amount of time to keep various events in the database, in seconds. Below are the default values.",
     "_DbExpire": {
       "events": 1728000,
-      "powerevents": 864000
+      "powerevents": 864000,
+      "statsevents": 2592000
     },
     "_Port": 443,
+    "_AliasPort": 444,
     "_RedirPort": 80,
+    "_ExactPorts": true,
     "_AllowLoginToken": true,
     "_AllowFraming": true,
+    "_AgentInviteCodes": true,
     "_WebRTC": false,
     "_Nice404": false,
     "_ClickOnce": false,
@@ -37,17 +43,22 @@
     "_UserBlockedIP": "127.0.0.1,::1,192.168.0.100",
     "_AgentAllowedIP": "192.168.0.100/24",
     "_AgentBlockedIP": "127.0.0.1,::1",
+    "_AuthLog": "c:\\temp\\auth.log",
     "_LocalDiscovery": {
       "name": "Local server name",
       "info": "Information about this server"
     },
-    "_TlsOffload": true,
+    "_TlsOffload": "127.0.0.1",
+    "_TrustedProxy": "127.0.0.1",
     "_MpsPort": 44330,
     "_MpsAliasPort": 4433,
     "_MpsAliasHost": "mps.mydomain.com",
     "_MpsTlsOffload": true,
     "_No2FactorAuth": true,
     "_Log": "main,web,webrequest,cert",
+    "_syslog": "meshcentral",
+    "_syslogauth": "meshcentral-auth",
+    "_syslogjson": "meshcentral-json",
     "_WebRtConfig": {
       "iceServers": [
         { "urls": "stun:stun.services.mozilla.com" },
@@ -64,10 +75,8 @@
       "meshcommander": "https://www.meshcommander.com/"
     },
     "__MaxInvalidLogin": "Time in minutes, max amount of bad logins from a source IP in the time before logins are rejected.",
-    "MaxInvalidLogin": { "time": 10, "count": 10, "coolofftime": 10 },
-    "_Plugins": {
-        "enabled": true
-    }
+    "_MaxInvalidLogin": { "time": 10, "count": 10, "coolofftime": 10 },
+    "_Plugins": { "enabled": true }
   },
   "_domains": {
     "": {
@@ -80,7 +89,12 @@
       "_UserNameIsEmail": true,
       "_NewAccountEmailDomains": [ "sample.com" ],
       "_NewAccountsRights": [ "nonewgroups", "notools" ],
-      "Footer": "<a href='https://twitter.com/mytwitter'>Twitter</a>",
+      "_ManageAllDeviceGroups": [ "admin" ],
+      "_WelcomeText": "Sample Text on Login Page.",
+      "_WelcomePicture": "mainwelcome.jpg",
+      "___Hide__": "Sum of: 1 = Hide header, 2 = Hide tab, 4 = Hide footer, 8 = Hide title, 16 = Hide left bar",
+      "_Hide": 4,
+      "_Footer": "<a href='https://twitter.com/mytwitter'>Twitter</a>",
       "_CertUrl": "https://192.168.2.106:443/",
       "_PasswordRequirements": { "min": 8, "max": 128, "upper": 1, "lower": 1, "numeric": 1, "nonalpha": 1, "reset": 90, "force2factor": true, "skip2factor": "127.0.0.1,192.168.2.0/24" },
       "_AgentNoProxy": true,
@@ -93,6 +107,7 @@
       "_UserSessionIdleTimeout" : 30,
       "__UserConsentFlags__" : "Set to: 1 for desktop, 2 for terminal, 3 for files, 7 for all",
       "_UserConsentFlags" : 7,
+      "_DesktopPrivacyBarText": "Your privacy bar message",
       "_Limits": {
         "_MaxDevices": 100,
         "_MaxUserAccounts": 100,
@@ -121,6 +136,7 @@
       "_agentConfig": [ "webSocketMaskOverride=1" ],
       "_SessionRecording": {
         "_filepath": "C:\\temp",
+        "_index": true,
         "__protocols__": "Is an array: 1 = Terminal, 2 = Desktop, 5 = Files, 100 = Intel AMT WSMAN, 101 = Intel AMT Redirection",
         "protocols": [ 1, 2, 101 ]
       }

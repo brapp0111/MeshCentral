@@ -114,7 +114,7 @@ function run(argv) {
     //console.log('addedModules = ' + JSON.stringify(addedModules));
     var actionpath = 'meshaction.txt';
     if (args.actionfile != null) { actionpath = args.actionfile; }
-    var actions = ['HELP', 'ROUTE', 'MICROLMS', 'AMTSCAN', 'AMTPOWER', 'AMTFEATURES', 'AMTNETWORK', 'AMTLOADWEBAPP', 'AMTLOADSMALLWEBAPP', 'AMTLOADLARGEWEBAPP', 'AMTCLEARWEBAPP', 'AMTSTORAGESTATE', 'AMTINFO', 'AMTINFODEBUG', 'AMTVERSIONS', 'AMTHASHES', 'AMTSAVESTATE', 'AMTSCRIPT', 'AMTUUID', 'AMTCCM', 'AMTACM', 'AMTDEACTIVATE', 'AMTACMDEACTIVATE', 'SMBIOS', 'RAWSMBIOS', 'MESHCOMMANDER', 'AMTAUDITLOG', 'AMTEVENTLOG', 'AMTPRESENCE'];
+    var actions = ['HELP', 'ROUTE', 'MICROLMS', 'AMTSCAN', 'AMTPOWER', 'AMTFEATURES', 'AMTNETWORK', 'AMTLOADWEBAPP', 'AMTLOADSMALLWEBAPP', 'AMTLOADLARGEWEBAPP', 'AMTCLEARWEBAPP', 'AMTSTORAGESTATE', 'AMTINFO', 'AMTINFODEBUG', 'AMTVERSIONS', 'AMTHASHES', 'AMTSAVESTATE', 'AMTSCRIPT', 'AMTUUID', 'AMTCCM', 'AMTACM', 'AMTDEACTIVATE', 'AMTACMDEACTIVATE', 'SMBIOS', 'RAWSMBIOS', 'MESHCOMMANDER', 'AMTAUDITLOG', 'AMTEVENTLOG', 'AMTPRESENCE', 'AMTWIFI'];
 
     // Load the action file
     var actionfile = null;
@@ -153,8 +153,10 @@ function run(argv) {
     if ((typeof args.cdrom) == 'string') { settings.cdrom = args.cdrom; }
     if ((typeof args.tag) == 'string') { settings.tag = args.tag; }
     if ((typeof args.scan) == 'string') { settings.scan = args.scan; }
+    if ((typeof args.token) == 'string') { settings.token = args.token; }
     if ((typeof args.timeout) == 'string') { settings.timeout = parseInt(args.timeout); }
     if ((typeof args.uuidoutput) == 'string' || args.uuidoutput) { settings.uuidoutput = args.uuidoutput; }
+    if (args.emailtoken) { settings.emailtoken = true; }
     if (args.debug === true) { settings.debuglevel = 1; }
     if (args.debug) { try { waitForDebugger(); } catch (e) { } }
     if (args.noconsole) { settings.noconsole = true; }
@@ -198,6 +200,7 @@ function run(argv) {
         console.log('  AmtFeatures       - Intel AMT features & user consent.');
         console.log('  AmtNetwork        - Intel AMT network interface settings.');
         console.log('  AmtScan           - Search local network for Intel AMT devices.');
+        console.log('  AmtWifi           - Intel AMT Wifi interface settings.');
         console.log('\r\nHelp on a specific action using:\r\n');
         console.log('  meshcmd help [action]');
         exit(1); return;
@@ -383,6 +386,24 @@ function run(argv) {
             console.log('AmtSCAN will look for Intel AMT device on the network. Example usage:\r\n\r\n  meshcmd amtscan --scan 192.168.1.0/24');
             console.log('\r\Required arguments:\r\n');
             console.log('  --scan [ip range]      The IP address range to perform the scan on.');
+        } else if (action == 'amtwifi') {
+            console.log('AmtWifi is used to get/set Intel AMT Wifi configuration. Example usage:\r\n\r\n  meshcmd amtwifi --host 1.2.3.4 --user admin --pass mypassword --list');
+            console.log('\r\nRequired arguments:\r\n');
+            console.log('  --host [hostname]         The IP address or DNS name of Intel AMT, 127.0.0.1 is default.');
+            console.log('  --pass [password]         The Intel AMT login password.');
+            console.log('  --[action]                Action options are list, add, del.');
+            console.log('\r\nOptional arguments:\r\n');
+            console.log('  --user [username]         The Intel AMT login username, admin is default.');
+            console.log('  --tls                     Specifies that TLS must be used.');
+            console.log('  --list                    List of stored Wifi profile');
+            console.log('  --add                     Add new Wifi profile');
+            console.log('     --name                 New Wifi profile name');
+            console.log('     --priority             Priority of this profile - default 0');
+            console.log('     --ssid                 Wifi SSID');
+            console.log('     --auth                 Wifi Authentication method (4 - WPA, 6 - WPA2/RSN) - default 6');
+            console.log('     --enc                  Wifi Encryption type (3 - TKIP, 4 - CCMP) - default 3');
+            console.log('     --psk                  Wifi password/pre-shared key');
+            console.log('  --del [profile-name]      Delete new Wifi profile');            
         } else {
             actions.shift();
             console.log('Invalid action, usage:\r\n\r\n  meshcmd help [action]\r\n\r\nValid actions are: ' + actions.join(', ') + '.');
@@ -688,6 +709,27 @@ function run(argv) {
         if ((settings.password == null) || (typeof settings.password != 'string') || (settings.password == '')) { console.log('No or invalid \"password\" specified, use --password [password].'); exit(1); return; }
         if ((settings.username == null) || (typeof settings.username != 'string') || (settings.username == '')) { settings.username = 'admin'; }
         performAmtNetConfig(args);
+    } else if (settings.action == 'amtwifi') { // Perform remote Intel AMT Wifi configuration operation
+        if (settings.hostname == null) { settings.hostname = '127.0.0.1'; }
+        if ((settings.password == null) || (typeof settings.password != 'string') || (settings.password == '')) { console.log('No or invalid \"password\" specified, use --password [password].'); exit(1); return; }
+        if ((settings.username == null) || (typeof settings.username != 'string') || (settings.username == '')) { settings.username = 'admin'; }
+        if (args.add != null) {
+            if ((args.name == null) || (typeof args.name != 'string') || args.name == '') {
+                console.log("Wifi profile name is required."); exit(1); return;
+            }
+            if ((args.ssid == null) || (typeof args.ssid != 'string') || args.ssid == '') {                
+                console.log("Wifi SSID is required."); exit(1); return;
+            }
+            if ((args.psk == null) || (typeof args.psk != 'string') || args.psk == '') {
+                console.log("Wifi password is required."); exit(1); return;
+            }
+        }
+        if (args.del !=null) {
+            if ((settings.name == null) || (typeof settings.name != 'string') || settings.name == '') {
+                console.log("Wifi profile name is required."); exit(1); return;
+            }
+        }
+        performAmtWifiConfig(args);
     } else if (settings.action == 'amtfeatures') { // Perform remote Intel AMT feature configuration operation
         if (settings.hostname == null) { settings.hostname = '127.0.0.1'; }
         if ((settings.password == null) || (typeof settings.password != 'string') || (settings.password == '')) { console.log('No or invalid \"password\" specified, use --password [password].'); exit(1); return; }
@@ -1022,7 +1064,8 @@ function startMeshCommander() {
                 } else {
                     // If TLS is going to be used, setup a TLS socket
                     var tls = require('tls');
-                    var tlsoptions = { host: webargs.host, port: webargs.port, secureProtocol: ((webargs.tls1only == 1) ? 'TLSv1_method' : 'SSLv23_method'), rejectUnauthorized: false };
+                    var tlsoptions = { host: webargs.host, port: webargs.port, rejectUnauthorized: false };
+                    if (webargs.tls1only == 1) { tlsoptions.secureProtocol = 'TLSv1_method'; }
                     ws.forwardclient = tls.connect(tlsoptions, function () { debug(1, 'Connected TLS to ' + webargs.host + ':' + webargs.port + '.'); this.pipe(this.ws, { end: false }); this.ws.pipe(this, { end: false }); });
                     ws.forwardclient.on('error', function () { debug(1, 'TLS connection error to ' + webargs.host + ':' + webargs.port + '.'); try { this.ws.end(); } catch (e) { } });
                     ws.forwardclient.ws = ws;
@@ -2047,20 +2090,80 @@ function processLmsControlData(data) {
 //
 
 function startRouter() {
+    // Start by requesting a login token, this is needed because of 2FA and check that we have correct credentials from the start
+    var options;
+    try {
+        var url = settings.serverurl.split('meshrelay.ashx').join('control.ashx') + '?user=' + settings.username + '&pass=' + settings.password;
+        if (settings.emailtoken) { url += '&token=**email**'; } else if (settings.token != null) { url += '&token=' + settings.token; }
+        options = http.parseUri(url);
+    } catch (e) { console.log("Unable to parse \"serverUrl\"."); process.exit(1); return; }
+    options.checkServerIdentity = onVerifyServer;
+    options.rejectUnauthorized = false;
+    settings.websocket = http.request(options);
+    settings.websocket.upgrade = OnServerWebSocket;
+    settings.websocket.on('error', function (e) { console.log("ERROR: " + JSON.stringify(e)); });
+    settings.websocket.end();
+}
+
+function OnServerWebSocket(msg, s, head) {
+    settings.webchannel = s;
+    s.on('data', function (msg) {
+        var command = JSON.parse(msg);
+        switch (command.action) {
+            case 'close': {
+                if (command.cause == 'noauth') {
+                    if (command.msg == 'tokenrequired') {
+                        if (command.email2fasent === true) {
+                            console.log("Login token email sent.");
+                        } else if (command.email2fa === true) {
+                            console.log("Login token required, use --token [token], or --emailtoken get a token.");
+                        } else {
+                            console.log("Login token required, use --token [token].");
+                        }
+                    } else { console.log("Invalid username or password."); }
+                } else { console.log("Server disconnected: " + command.msg); }
+                process.exit(1);
+                return;
+            }
+            case 'serverinfo': {
+                s.write("{\"action\":\"authcookie\"}"); // Ask for our first authentication cookie
+                break;
+            }
+            case 'authcookie': {
+                if (settings.acookie == null) {
+                    settings.acookie = command.cookie;
+                    settings.rcookie = command.rcookie;
+                    settings.renewCookieTimer = setInterval(function () { settings.webchannel.write("{\"action\":\"authcookie\"}"); }, 600000); // Ask for new cookie every 10 minutes
+                    startRouterEx();
+                } else {
+                    settings.acookie = command.cookie;
+                    settings.rcookie = command.rcookie;
+                }
+                break;
+            }
+        }
+    });
+    s.on('error', function () { console.log("Server connection error."); process.exit(1); return; });
+    s.on('close', function () { console.log("Server closed the connection."); process.exit(1); return; });
+}
+
+function startRouterEx() {
     tcpserver = net.createServer(OnTcpClientConnected);
     tcpserver.on('error', function (e) { console.log("ERROR: " + JSON.stringify(e)); exit(0); return; });
-    tcpserver.listen(settings.localport, function () {
-        // We started listening.
-        if (settings.remotetarget == null) {
-            console.log('Redirecting local port ' + settings.localport + ' to remote port ' + settings.remoteport + '.');
-        } else {
-            console.log('Redirecting local port ' + settings.localport + ' to ' + settings.remotetarget + ':' + settings.remoteport + '.');
-        }
-        console.log("Press ctrl-c to exit.");
+    try {
+        tcpserver.listen(settings.localport, function () {
+            // We started listening.
+            if (settings.remotetarget == null) {
+                console.log('Redirecting local port ' + settings.localport + ' to remote port ' + settings.remoteport + '.');
+            } else {
+                console.log('Redirecting local port ' + settings.localport + ' to ' + settings.remotetarget + ':' + settings.remoteport + '.');
+            }
+            console.log("Press ctrl-c to exit.");
 
-        // If settings has a "cmd", run it now.
-        //process.exec("notepad.exe");
-    });
+            // If settings has a "cmd", run it now.
+            //process.exec("notepad.exe");
+        });
+    } catch (ex) { console.log("Unable to bind to local TCP port " + settings.localport + "."); exit(1); return; }
 }
 
 // Called when a TCP connect is received on the local port. Launch a tunnel.
@@ -2070,8 +2173,9 @@ function OnTcpClientConnected(c) {
         debug(1, "Client connected");
         c.on('end', function () { disconnectTunnel(this, this.websocket, "Client closed"); });
         c.pause();
+        var options;
         try {
-            options = http.parseUri(settings.serverurl + '?user=' + settings.username + '&pass=' + settings.password + '&nodeid=' + settings.remotenodeid + '&tcpport=' + settings.remoteport + (settings.remotetarget == null ? '' : '&tcpaddr=' + settings.remotetarget));
+            options = http.parseUri(settings.serverurl + '?auth=' + settings.acookie + '&nodeid=' + settings.remotenodeid + '&tcpport=' + settings.remoteport + (settings.remotetarget == null ? '' : '&tcpaddr=' + settings.remotetarget));
         } catch (e) { console.log("Unable to parse \"serverUrl\"."); process.exit(1); return; }
         options.checkServerIdentity = onVerifyServer;
         options.rejectUnauthorized = false;
@@ -2105,8 +2209,8 @@ function OnWebSocket(msg, s, head) {
             }
         }
     });
-    s.on('error', function (msg) { disconnectTunnel(this.tcp, this, 'Websocket error'); });
-    s.on('close', function (msg) { disconnectTunnel(this.tcp, this, 'Websocket closed'); });
+    s.on('error', function () { disconnectTunnel(this.tcp, this, 'Websocket error'); });
+    s.on('close', function () { disconnectTunnel(this.tcp, this, 'Websocket closed'); });
     s.parent = this;
 }
 
@@ -2408,6 +2512,104 @@ function performAmtNetConfig1(stack, name, response, status, args) {
     }
 }
 
+//
+// Intel AMT Wifi configuration
+//
+
+function performAmtWifiConfig(args) {
+    if ((settings.hostname == '127.0.0.1') || (settings.hostname.toLowerCase() == 'localhost')) {
+        settings.noconsole = true; startLms(performAmtWifiConfig0, false, args);
+    } else {
+        performAmtWifiConfig0(1, args);
+    }
+}
+
+function performAmtWifiConfig0(state, args) {
+    var transport = require('amt-wsman-duk');
+    var wsman = require('amt-wsman');
+    var amt = require('amt');
+    wsstack = new wsman(transport, settings.hostname, settings.tls ? 16993 : 16992, settings.username, settings.password, settings.tls);
+    amtstack = new amt(wsstack);
+    amtstack.BatchEnum(null, ['CIM_WiFiEndpointSettings'], performAmtWifiConfig1, args);
+}
+
+function performAmtWifiConfig1(stack, name, response, status, args) {
+    if ( status == 200 ) {
+        var wifiAuthMethod = {1: "Other", 2: "Open", 3: "Shared Key", 4: "WPA PSK", 5: "WPA 802.1x", 6: "WPA2 PSK", 7: "WPA2 802.1x", 32768 : "WPA3 802.1x"};
+        var wifiEncMethod = {1: "Other", 2: "WEP", 3: "TKIP", 4: "CCMP", 5: "None"}
+        var wifiProfiles = {};
+        for (var y in response['CIM_WiFiEndpointSettings'].responses) {
+            var z = response['CIM_WiFiEndpointSettings'].responses[y];
+            var n = z['ElementName'];
+            wifiProfiles[n]= {'Priority': z['Priority'], 'SSID':z['SSID'],'AuthenticationMethod': z['AuthenticationMethod'], 'EncryptionMethod': z['EncryptionMethod']};
+        }
+
+        if (args) {
+            if (args.list) {
+                console.log('List of AMT Wifi profiles:');
+                if (wifiProfiles.length==0) {
+                    console.log('No Wifi profiles is stored.');
+                }
+                for (var t in wifiProfiles) {
+                    var w = wifiProfiles[t];
+                    console.log('Profile Name: '+t+'; Priority: '+w['Priority']+ '; SSID: '+w['SSID']+'; Security: '+wifiAuthMethod[w['AuthenticationMethod']]+'/'+wifiEncMethod[w['EncryptionMethod']]);
+                }
+                process.exit(0);
+            } else if (args.add) {
+                if (args.auth==null) {args.auth=6}//if not set, default to WPA2 PSK
+                if (args.enc==null) {args.enc=3}//if not set, default to TKIP
+                if (args.priority==null) {args.priority=0}//if not set, default to 0
+
+                var wifiep = {
+                    __parameterType: 'reference',
+                    __resourceUri: 'http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_WiFiEndpoint',
+                    Name: 'WiFi Endpoint 0'
+                };
+
+                var wifiepsettinginput = {
+                    __parameterType: 'instance',
+                    __namespace: 'http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_WiFiEndpointSettings',
+                    ElementName: args.name,
+                    InstanceID: 'Intel(r) AMT:WiFi Endpoint Settings ' + args.name,
+                    AuthenticationMethod: args.auth,                        
+                    EncryptionMethod: args.enc,
+                    SSID: args.ssid,
+                    Priority: args.priority,
+                    PSKPassPhrase: args.psk
+                }                
+                stack.AMT_WiFiPortConfigurationService_AddWiFiSettings(wifiep, wifiepsettinginput, null, null, null, 
+                    function(stck, nm, resp, sts) {
+                        if (sts==200) {
+                            console.log("Wifi profile " + args.name + " successfully added.");
+                        } else {
+                            console.log("Failed to add wifi profile " + args.name + ".");
+                        }
+                        process.exit(0);
+                    });                
+            } else if (args.del) {
+                if (wifiProfiles[args.name]==null) {
+                    console.log("Profile "+args.name+" could not be found.");
+                    process.exit(0);
+                }
+                stack.Delete('CIM_WiFiEndpointSettings', { InstanceID : 'Intel(r) AMT:WiFi Endpoint Settings ' + args.name }, 
+                    function(stck, nm, resp, sts){
+                        if (sts==200) {
+                            console.log("Wifi profile " + args.name + " successfully deleted.");
+                        } else {
+                            console.log("Failed to delete wifi profile " + args.name + ".");
+                        }
+                        process.exit(0);
+                    }, 
+                0, 1);
+            }
+        } else {
+            process.exit(0);
+        }         
+    } else {
+        console.log("Error, status " + status + ".");
+        process.exit(1);
+    }
+}
 
 //
 // Intel AMT feature configuration action

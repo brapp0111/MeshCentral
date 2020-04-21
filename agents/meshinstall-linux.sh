@@ -75,7 +75,15 @@ CheckInstallAgent() {
 			machineid=30
 		  else
 			# Linux x86, 64 bit
-			machineid=6
+			bitlen=$( getconf LONG_BIT )
+			if [ $bitlen == '32' ] 
+			then
+				# 32 bit OS
+				machineid=5
+			else
+				# 64 bit OS
+				machineid=6
+			fi
 		  fi
         fi
         if [ $machinetype == 'x86' ] || [ $machinetype == 'i686' ] || [ $machinetype == 'i586' ]
@@ -156,12 +164,12 @@ DownloadAgent() {
         # systemd
         if [ -d "/lib/systemd/system/" ]
         then
-            echo -e "[Unit]\nDescription=MeshCentral Agent\n[Service]\nExecStart=/usr/local/mesh/meshagent\nStandardOutput=null\nRestart=always\nRestartSec=3\n[Install]\nWantedBy=multi-user.target\nAlias=meshagent.service\n" > /lib/systemd/system/meshagent.service
+            echo -e "[Unit]\nDescription=MeshCentral Agent\n[Service]\nWorkingDirectory=/usr/local/mesh\nExecStart=/usr/local/mesh/meshagent\nStandardOutput=null\nRestart=always\nRestartSec=3\n[Install]\nWantedBy=multi-user.target\nAlias=meshagent.service\n" > /lib/systemd/system/meshagent.service
         else
             # Some distros have the systemd folder at a different place
             if [ -d "/usr/lib/systemd/system/" ]
             then
-                echo -e "[Unit]\nDescription=MeshCentral Agent\n[Service]\nExecStart=/usr/local/mesh/meshagent\nStandardOutput=null\nRestart=always\nRestartSec=3\n[Install]\nWantedBy=multi-user.target\nAlias=meshagent.service\n" > /usr/lib/systemd/system/meshagent.service
+                echo -e "[Unit]\nDescription=MeshCentral Agent\n[Service]\nWorkingDirectory=/usr/local/mesh\nExecStart=/usr/local/mesh/meshagent\nStandardOutput=null\nRestart=always\nRestartSec=3\n[Install]\nWantedBy=multi-user.target\nAlias=meshagent.service\n" > /usr/lib/systemd/system/meshagent.service
             else
                 echo "Unable to find systemd folder."
             fi
